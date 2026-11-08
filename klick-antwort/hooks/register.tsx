@@ -21,6 +21,10 @@ const ANLEITUNG = `# Rückfragen, Aufgaben und Eingaben über die Klick-Box
 - ${EINGABE}: Wenn du einen einzelnen Wert von der Person brauchst, etwa eine E-Mail-Adresse, einen Namen, eine URL oder eine Zahl (frage + feld als kurze Bezeichnung + optional platzhalter als Beispiel). Frag damit nie nach Passwörtern, API-Schlüsseln, Tokens, Kartennummern oder anderen Geheimnissen.
 Bei offenen Fragen, die eine längere freie Antwort verlangen, frag normal im Text.`
 
+// Eingabefelder: drei Zeilen hoch; das Absende-Knöpfchen zeichnet die App selbst, hier nur beschriftet.
+const FELD_ZEILEN = 3
+const ABSENDEN = '↵'
+
 const ERLEDIGT = 'Erledigt: Ich habe alle Punkte der Checkliste abgehakt.'
 
 // Felder, die nach Zugangsdaten oder Zahlungsdaten klingen, lehnt das Add-on selbst ab.
@@ -281,15 +285,18 @@ export const register: Register = on => {
             ))}
           </Box>
           {e.surface !== 'mobile' && 'Input' in el ? (
-            <el.Input
-              key="eigen"
-              label="Eigene Ergänzung"
-              placeholder="optional, z. B. etwas, das in der Liste fehlt"
-              value={eigen}
-              submitLabel="senden"
-              onInput={v => update($, entwurf, () => v)}
-              onSubmit={v => abschicken(v)}
-            />
+            <Box flexDirection="column" width="100%">
+              <el.Input
+                key="eigen"
+                submitLabel={ABSENDEN}
+                rows={FELD_ZEILEN}
+                label="Eigene Ergänzung"
+                placeholder="optional, z. B. etwas, das in der Liste fehlt"
+                value={eigen}
+                onInput={v => update($, entwurf, () => v)}
+                onSubmit={v => abschicken(v)}
+              />
+            </Box>
           ) : null}
           <Box flexDirection="row" flexWrap="wrap" gap="sm" alignItems="center">
             {bereit ? (
@@ -371,21 +378,24 @@ export const register: Register = on => {
         <Box flexDirection="column" gap="sm">
           <Text bold>{f.frage}</Text>
           {e.surface !== 'mobile' && 'Input' in el ? (
-            <Box flexDirection="row" flexWrap="wrap" gap="sm" alignItems="center">
-              <el.Input
-                key="feld"
-                label={f.feld}
-                placeholder={f.platzhalter}
-                value={wert}
-                submitLabel="senden"
-                autoFocus
-                onInput={v => update($, entwurf, () => v)}
-                onSubmit={v => abschicken(v)}
-              />
-              {wert.trim() ? (
-                <Button key="senden" label="Senden" variant="primary" onPress={() => abschicken(wert)} />
-              ) : null}
-              {zu}
+            <Box flexDirection="column" gap="sm" width="100%">
+              <Box flexDirection="column" width="100%">
+                <el.Input
+                  key="feld"
+                  submitLabel={ABSENDEN}
+                  rows={FELD_ZEILEN}
+                  label={f.feld}
+                  placeholder={f.platzhalter}
+                  value={wert}
+                  autoFocus
+                  onInput={v => update($, entwurf, () => v)}
+                  onSubmit={v => abschicken(v)}
+                />
+              </Box>
+              <Box flexDirection="row" gap="sm" alignItems="center">
+                <Text dimColor>Enter schickt ab.</Text>
+                {zu}
+              </Box>
             </Box>
           ) : (
             <Box flexDirection="row" gap="sm" alignItems="center">

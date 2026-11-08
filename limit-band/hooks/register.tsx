@@ -100,6 +100,7 @@ export const register: Register = on => {
       }
       return (
         <Box flexDirection="column">
+          {darunter}
           {tag || woche ? (
             <Box flexDirection="column">
               {zeile('Tag  ', tag, false)}
@@ -108,7 +109,6 @@ export const register: Register = on => {
           ) : (
             <Text dimColor>Limits: noch keine Daten – erscheint nach der ersten Antwort</Text>
           )}
-          {darunter}
         </Box>
       )
     }
@@ -177,10 +177,12 @@ export const register: Register = on => {
 
     if (!darunter) return zeile
 
+    // Das Band steht immer ganz unten, direkt über der Eingabezeile: Rückfragen und
+    // andere Inhalte darüber, egal in welcher Reihenfolge die App die Add-ons lädt.
     return (
       <Box flexDirection="column" gap="sm">
-        {zeile}
         {darunter}
+        {zeile}
       </Box>
     )
   })

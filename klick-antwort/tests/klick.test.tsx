@@ -133,7 +133,7 @@ test('Eingabefeld: Wert tippen und mit Enter abschicken', async ($, on) => {
   expect(gesendet).toEqual([])
 
   await ui.input({ key: 'feld', text: 'test@beispiel.de', kind: 'change' })
-  expect(await ui.find({ key: 'senden' })).toBeDefined()
+  expect(await ui.find({ key: 'senden' })).toBeUndefined()
   await ui.input({ key: 'feld', text: 'test@beispiel.de' })
   expect(gesendet).toEqual(['E-Mail-Adresse: test@beispiel.de'])
   expect(await ui.find({ type: 'Text', text: /welche Adresse/ })).toBeUndefined()
