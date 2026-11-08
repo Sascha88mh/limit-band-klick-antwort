@@ -8,7 +8,9 @@ Zwei kleine Add-ons (Mods) für Claude Code, gedacht für die Claude-Desktop-App
 - **klick-antwort** – Rückfragen von Claude erscheinen als klickbare Knöpfe
   über der Eingabezeile. Ein Klick (oder Taste 1–6) schickt die Antwort ab.
   Dazu bekommt Claude eine Anweisung, Entscheidungsfragen mit wenigen klaren
-  Optionen über dieses Tool zu stellen.
+  Optionen über dieses Tool zu stellen. In der Desktop-App landen auch die
+  Abschlussfragen am Ende eines Zugs (die „Next step“-Box) dort, sofern alle
+  Knöpfe reine Antworten sind; App-Aktionen wie Commit bleiben in der App-Box.
 
 Beide laufen auch im Terminal (das Band dann als Zeichenbalken).
 

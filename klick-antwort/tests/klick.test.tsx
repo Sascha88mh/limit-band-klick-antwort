@@ -33,3 +33,37 @@ test('Zu wenige Optionen werden abgelehnt', async ($, on) => {
   const r = await $.tool.call({ tool: 'mcp__klick-antwort__rueckfrage', frage: 'X?', optionen: ['nur eine'] })
   expect(r.deny).toBeDefined()
 })
+
+test('Abschlussfrage der App landet in der Fragebox', async ($, on) => {
+  const anApp: Record<string, unknown>[] = []
+  on('tool.register', () => ({ value: undefined }))
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  on('tool.call', { tool: 'mcp__ccd_turn__wrap_up' }, (_, e) => { anApp.push({ ...e }); return { result: 'ok' } })
+  on('ui.render', ($, e) => { const { Text } = $.ui.resolve(e); return <Text>unten</Text> })
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+
+  const r = await $.tool.call({
+    tool: 'mcp__ccd_turn__wrap_up',
+    recap: 'Fertig.',
+    ask: 'Live stellen?',
+    actions: [{ label: 'Ja, live' }, { label: 'Erst ändern' }],
+  })
+  expect(r.deny).toBeUndefined()
+  expect(anApp.length).toBe(1)
+  expect(anApp[0].ask).toBeUndefined()
+  expect(anApp[0].actions).toBeUndefined()
+  expect(anApp[0].recap).toBe('Fertig.')
+
+  const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
+  expect(await ui.find({ type: 'Text', text: /Live stellen\?/ })).toBeDefined()
+  await ui.unmount()
+
+  // Mit App-Aktion bleibt alles in der App-Box.
+  await $.tool.call({
+    tool: 'mcp__ccd_turn__wrap_up',
+    recap: 'Fertig.',
+    ask: 'Committen?',
+    actions: [{ action: 'commit' }, { label: 'Nicht jetzt' }],
+  })
+  expect(anApp[1].ask).toBe('Committen?')
+})

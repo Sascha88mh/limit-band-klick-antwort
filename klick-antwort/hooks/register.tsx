@@ -6,6 +6,7 @@ import type { Rueckfrage } from '../types'
 const offen = atom({ plugin: 'klick-antwort', key: 'offen' } as const, null as Rueckfrage | null)
 
 const TOOL = 'mcp__klick-antwort__rueckfrage'
+const WRAP_UP = 'mcp__ccd_turn__wrap_up'
 
 const ANLEITUNG = `# Rückfragen mit Klick-Antworten
 Wenn du eine Entscheidung oder Auswahl der Person brauchst und die Antwort aus wenigen klaren Möglichkeiten besteht, rufe das Tool ${TOOL} auf (frage + 2 bis 6 kurze Optionen, empfohlene Option zuerst), statt die Frage nur als Text zu stellen. Die Person klickt dann einfach eine Antwort an. Nach dem Aufruf beendest du deinen Zug sofort und wartest: Die gewählte Antwort kommt als nächste Nachricht der Person. Pro Zug höchstens eine solche Rückfrage. Bei offenen Fragen, die freien Text verlangen, frag normal im Text.`
@@ -57,6 +58,36 @@ export const register: Register = on => {
     return {
       result:
         'Die Rückfrage wird der Person jetzt als Knöpfe angezeigt. Beende deinen Zug ohne weiteren Text außer höchstens einem kurzen Satz; die gewählte Antwort kommt als nächste Nachricht.',
+    }
+  })
+
+  // Die Abschlussfrage der Desktop-App (Next-Step-Box) in die eigene Fragebox umleiten.
+  // Nur wenn jeder Knopf eine reine Antwort ist: App-Aktionen (commit, create_pr …) kann
+  // nur die App selbst ausführen, die bleiben dort.
+  on('tool.call', { tool: WRAP_UP }, async ($, e, next) => {
+    const { ask, actions, ...rest } = e as unknown as {
+      ask?: unknown
+      actions?: unknown
+      [k: string]: unknown
+    }
+    const frage = typeof ask === 'string' ? ask.trim() : ''
+    const knoepfe = Array.isArray(actions) ? actions : []
+    const antworten = knoepfe
+      .map(k => (k && typeof k === 'object' ? (k as { label?: unknown; action?: unknown }) : {}))
+      .filter(k => !k.action && typeof k.label === 'string' && k.label.trim() !== '')
+      .map(k => String(k.label).trim())
+
+    if (!frage || antworten.length === 0 || antworten.length !== knoepfe.length) return next(e)
+
+    await update($, offen, () => ({ frage, optionen: antworten.slice(0, 6) }))
+    const r = await next(rest as unknown as typeof e)
+    if (r.deny !== undefined) return r
+    return {
+      ...r,
+      context: [
+        ...(r.context ?? []),
+        'Die Frage aus ask wurde nicht in der App-Box, sondern als Klick-Knöpfe über der Eingabezeile angezeigt. Stell sie nicht noch einmal im Text.',
+      ],
     }
   })
 
