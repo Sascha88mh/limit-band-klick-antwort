@@ -81,21 +81,24 @@ export const register: Register = on => {
     }
 
     return (
-      <Box flexDirection="column" gap="sm">
-        <Text bold>{r.frage}</Text>
-        <Box flexDirection="row" flexWrap="wrap" gap="sm">
-          {r.optionen.map((o, i) => (
-            <Button
-              key={`opt-${i}`}
-              label={o}
-              hotkey={String(i + 1)}
-              variant={i === 0 ? 'primary' : undefined}
-              onPress={antworten(o)}
-            />
-          ))}
-          <Button key="schliessen" label="✕" role="dismiss" onPress={() => update($, offen, () => null)} />
+      <Box flexDirection="column">
+        {/* Der Seitenabstand liegt auf einer inneren Box: an der Wurzel wird er vom Rahmen nicht zuverlässig gezeichnet. */}
+        <Box flexDirection="column" gap="sm" paddingX="xl">
+          <Text bold>{r.frage}</Text>
+          <Box flexDirection="row" flexWrap="wrap" gap="sm">
+            {r.optionen.map((o, i) => (
+              <Button
+                key={`opt-${i}`}
+                label={o}
+                hotkey={String(i + 1)}
+                variant={i === 0 ? 'primary' : undefined}
+                onPress={antworten(o)}
+              />
+            ))}
+            <Button key="schliessen" label="✕" role="dismiss" onPress={() => update($, offen, () => null)} />
+          </Box>
+          <Text dimColor>Klicken, Taste 1–{r.optionen.length} oder einfach selbst etwas tippen.</Text>
         </Box>
-        <Text dimColor>Klicken, Taste 1–{r.optionen.length} oder einfach selbst etwas tippen.</Text>
         {darunter ? <Box marginTop="sm">{darunter}</Box> : null}
       </Box>
     )
