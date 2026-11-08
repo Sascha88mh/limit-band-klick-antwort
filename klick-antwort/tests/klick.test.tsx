@@ -153,7 +153,7 @@ test('Geheimnisse und lange Knopf-Texte werden abgefangen', async ($, on) => {
   on('ui.render', ($, e) => { const { Text } = $.ui.resolve(e); return <Text>unten</Text> })
   await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
 
-  for (const feld of ['Passwort', 'API-Key', 'Stripe Secret', 'IBAN', 'Kreditkartennummer', 'PIN']) {
+  for (const feld of ['Passwort', 'API-Key', 'Stripe Secret', 'IBAN', 'Kreditkartennummer', 'PIN', 'Kontonummer', 'BIC', 'Bearer-Token', 'SSH Private Key', 'Recovery-Code', 'Seed Phrase']) {
     const r = await $.tool.call({ tool: 'mcp__klick-antwort__eingabe', frage: 'Bitte eintragen', feld })
     expect(r.deny).toBeDefined()
   }

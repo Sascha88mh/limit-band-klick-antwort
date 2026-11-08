@@ -24,8 +24,17 @@ Bei offenen Fragen, die eine längere freie Antwort verlangen, frag normal im Te
 const ERLEDIGT = 'Erledigt: Ich habe alle Punkte der Checkliste abgehakt.'
 
 // Felder, die nach Zugangsdaten oder Zahlungsdaten klingen, lehnt das Add-on selbst ab.
-const GEHEIM =
-  /pass(wort|word|phrase)|kennwort|\bpin\b|\btan\b|token|api[\s_-]?key|schl(ü|ue)ssel|secret|geheim|credential|zugangsdaten|\biban\b|kredit\s?karte|karten\s?nummer|card\s?number|\bcvc\b|\bcvv\b|sicherheitscode|2fa|einmalcode|otp\b/i
+const GEHEIM = new RegExp(
+  [
+    'pass(wort|word|phrase)', 'kennwort', '\\bpin\\b', '\\btan\\b', 'token', 'bearer', 'authori[sz]ation',
+    'api[\\s_-]?key', '\\bkey\\b', 'schl(ü|ue)ssel', 'secret', 'geheim', 'credential', 'zugangsdaten',
+    'private?[\\s_-]?key', 'ssh', 'signing', 'encryption', 'seed[\\s_-]?phrase', 'mnemonic',
+    'recovery', 'wiederherstellung', 'backup[\\s_-]?code', 'sicherheitscode', '2fa', 'einmalcode', '\\botp\\b',
+    '\\biban\\b', '\\bbic\\b', 'swift', 'konto(nummer|daten)', 'bankverbindung',
+    'kredit\\s?karte', 'karten\\s?(nummer|daten)', 'card\\s?number', '\\bcvc\\b', '\\bcvv\\b', 'prüfziffer',
+  ].join('|'),
+  'i',
+)
 
 /** Feldbezeichnung als eine kurze Zeile. */
 const kurz = (v: string) => v.replace(/\s+/g, ' ').trim().slice(0, 40)
