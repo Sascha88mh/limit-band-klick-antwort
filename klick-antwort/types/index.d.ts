@@ -1,5 +1,12 @@
 /** Rückfrage mit Antwort-Knöpfen. `art` fehlt bei Werten aus älteren Versionen. */
-export type Rueckfrage = { art?: 'frage'; frage: string; optionen: string[] }
+export type Rueckfrage = {
+  art?: 'frage'
+  frage: string
+  optionen: string[]
+  /** Mehrfachauswahl: Optionen als Kästchen, abgeschickt mit „Auswahl senden“. */
+  mehrfach?: true
+  gewaehlt?: boolean[]
+}
 
 /** Aufgaben-Checkliste, die die Person abhakt und dann als erledigt abschickt. */
 export type Aufgaben = { art: 'aufgaben'; titel: string; punkte: string[]; erledigt: boolean[] }

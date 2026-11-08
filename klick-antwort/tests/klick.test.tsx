@@ -170,3 +170,32 @@ test('Geheimnisse und lange Knopf-Texte werden abgefangen', async ($, on) => {
   expect(label.length <= 80).toBe(true)
   await ui.unmount()
 })
+
+test('Mehrfachauswahl: ankreuzen, ergänzen, gesammelt senden', async ($, on) => {
+  const gesendet: string[] = []
+  on('tool.register', () => ({ value: undefined }))
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  on('prompt.submit', (_, e) => { gesendet.push(e.text); return { text: e.text } })
+  on('ui.render', ($, e) => { const { Text } = $.ui.resolve(e); return <Text>unten</Text> })
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+
+  const frage = { tool: 'mcp__klick-antwort__rueckfrage', frage: 'Welche Funktionen?', optionen: ['Login', 'Suche', 'Newsletter'], mehrfach: true } as const
+  expect((await $.tool.call(frage)).deny).toBeUndefined()
+
+  const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
+  expect(await ui.find({ key: 'eigen' })).toBeDefined()
+  expect(await ui.find({ key: 'auswahl' })).toBeUndefined()
+
+  await ui.press({ key: 'wahl-0' })
+  await ui.press({ key: 'wahl-2' })
+  await ui.input({ key: 'eigen', text: 'Dunkelmodus', kind: 'change' })
+  await ui.press({ key: 'auswahl' })
+  expect(gesendet).toEqual(['Meine Auswahl: Login, Newsletter\nAußerdem: Dunkelmodus'])
+  expect(await ui.find({ type: 'Text', text: /Welche Funktionen/ })).toBeUndefined()
+
+  // Nur eigener Text, nichts angekreuzt, mit Enter abgeschickt.
+  await $.tool.call(frage)
+  await ui.input({ key: 'eigen', text: 'Keine davon' })
+  expect(gesendet[1]).toBe('Meine Antwort: Keine davon')
+  await ui.unmount()
+})

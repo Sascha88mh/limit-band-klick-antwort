@@ -16,7 +16,7 @@ const WARTEN =
 
 const ANLEITUNG = `# Rückfragen, Aufgaben und Eingaben über die Klick-Box
 Über der Eingabezeile gibt es eine Box, in der die Person mit einem Klick antwortet. Nutze sie über drei Werkzeuge, jeweils höchstens eines pro Zug. Nach dem Aufruf beendest du deinen Zug sofort und wartest: Die Antwort kommt als nächste Nachricht der Person.
-- ${TOOL}: Wenn du eine Entscheidung oder Auswahl brauchst und die Antwort aus wenigen klaren Möglichkeiten besteht (frage + 2 bis 6 kurze Optionen, empfohlene zuerst). Stell solche Fragen nicht nur als Text.
+- ${TOOL}: Wenn du eine Entscheidung oder Auswahl brauchst und die Antwort aus wenigen klaren Möglichkeiten besteht (frage + 2 bis 8 kurze Optionen, empfohlene zuerst). Können mehrere Optionen zugleich zutreffen (z. B. „Welche Funktionen soll die Seite haben?“), setze mehrfach: true: Die Person hakt dann Kästchen an und schickt ihre Auswahl gesammelt ab. Stell solche Fragen nicht nur als Text.
 - ${AUFGABEN}: Wenn die Person selbst etwas tun muss, bevor es weitergeht, etwa einen Account anlegen, eine Einstellung ändern, eine Datei hochladen oder etwas im Browser bestätigen (titel + 1 bis 8 Stichpunkte, je ein konkreter Schritt in ganz kurzer, einfacher Sprache, in der richtigen Reihenfolge). Die Person hakt die Punkte ab und schickt „Erledigt“; dann weißt du, dass alles getan ist.
 - ${EINGABE}: Wenn du einen einzelnen Wert von der Person brauchst, etwa eine E-Mail-Adresse, einen Namen, eine URL oder eine Zahl (frage + feld als kurze Bezeichnung + optional platzhalter als Beispiel). Frag damit nie nach Passwörtern, API-Schlüsseln, Tokens, Kartennummern oder anderen Geheimnissen.
 Bei offenen Fragen, die eine längere freie Antwort verlangen, frag normal im Text.`
@@ -62,7 +62,7 @@ export const register: Register = on => {
     await $.tool.register({
       name: 'rueckfrage',
       description:
-        'Zeigt der Person eine Rückfrage mit 2 bis 6 klickbaren Antwort-Knöpfen über der Eingabezeile. Danach den Zug beenden; die gewählte Antwort kommt als nächste Nachricht.',
+        'Zeigt der Person eine Rückfrage mit 2 bis 8 klickbaren Antworten über der Eingabezeile, mit mehrfach: true als ankreuzbare Kästchen. Danach den Zug beenden; die Antwort kommt als nächste Nachricht.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -71,8 +71,12 @@ export const register: Register = on => {
             type: 'array',
             items: { type: 'string' },
             minItems: 2,
-            maxItems: 6,
+            maxItems: 8,
             description: 'Kurze Antworten (je 1 bis 6 Wörter), empfohlene zuerst.',
+          },
+          mehrfach: {
+            type: 'boolean',
+            description: 'true, wenn mehrere Optionen zugleich gewählt werden dürfen: Die Person hakt Kästchen an und schickt die Auswahl ab.',
           },
         },
         required: ['frage', 'optionen'],
@@ -125,11 +129,22 @@ export const register: Register = on => {
   })
 
   on('tool.call', { tool: TOOL }, async ($, e) => {
-    const input = e as unknown as { frage?: unknown; optionen?: unknown }
+    const input = e as unknown as { frage?: unknown; optionen?: unknown; mehrfach?: unknown }
     const frage = text(input.frage)
-    const optionen = liste(input.optionen, 6)
+    const optionen = liste(input.optionen, 8)
     if (!frage || optionen.length < 2) {
       return { deny: 'Bitte eine Frage und mindestens zwei Optionen angeben.' }
+    }
+    if (input.mehrfach === true) {
+      await update($, entwurf, () => '')
+      await update($, offen, () => ({
+        art: 'frage' as const,
+        frage,
+        optionen,
+        mehrfach: true as const,
+        gewaehlt: optionen.map(() => false),
+      }))
+      return { result: `Die Auswahl wird der Person jetzt als Kästchen zum Ankreuzen angezeigt. ${WARTEN}` }
     }
     await update($, offen, () => ({ art: 'frage' as const, frage, optionen }))
     return { result: `Die Rückfrage wird der Person jetzt als Knöpfe angezeigt. ${WARTEN}` }
@@ -229,7 +244,69 @@ export const register: Register = on => {
     const zu = <Button key="schliessen" label="✕" role="dismiss" onPress={() => update($, offen, () => null)} />
 
     let inhalt
-    if (istFrage(r)) {
+    if (istFrage(r) && r.mehrfach) {
+      const gewaehlt = r.optionen.map((_, i) => r.gewaehlt?.[i] === true)
+      const anzahl = gewaehlt.filter(Boolean).length
+      const umschalten = (i: number) => () =>
+        update($, offen, alt =>
+          alt && istFrage(alt) && alt.mehrfach
+            ? { ...alt, gewaehlt: alt.optionen.map((_, j) => (j === i ? !(alt.gewaehlt?.[j] === true) : alt.gewaehlt?.[j] === true)) }
+            : alt,
+        )
+      const eigen = await read($, entwurf)
+      // Abgeschickt werden die angehakten Optionen (je auf eine kurze Zeile begrenzt) und dein eigener Text.
+      const abschicken = (zusatz: string) => {
+        const teile = r.optionen.filter((_, i) => gewaehlt[i])
+        const frei = zusatz.trim()
+        if (teile.length === 0 && !frei) return undefined
+        const zeilen = [
+          ...(teile.length ? [`Meine Auswahl: ${teile.join(', ')}`] : []),
+          ...(frei ? [`${teile.length ? 'Außerdem' : 'Meine Antwort'}: ${frei}`] : []),
+        ]
+        return senden(zeilen.join('\n'))
+      }
+      const bereit = anzahl > 0 || eigen.trim() !== ''
+      inhalt = (
+        <Box flexDirection="column" gap="sm">
+          <Text bold>{r.frage}</Text>
+          <Box flexDirection="column" gap="xs">
+            {r.optionen.map((o, i) => (
+              <Button
+                key={`wahl-${i}`}
+                label={`${gewaehlt[i] ? '☑' : '☐'}  ${o}`}
+                hotkey={String(i + 1)}
+                plain
+                onPress={umschalten(i)}
+              />
+            ))}
+          </Box>
+          {e.surface !== 'mobile' && 'Input' in el ? (
+            <el.Input
+              key="eigen"
+              label="Eigene Ergänzung"
+              placeholder="optional, z. B. etwas, das in der Liste fehlt"
+              value={eigen}
+              submitLabel="senden"
+              onInput={v => update($, entwurf, () => v)}
+              onSubmit={v => abschicken(v)}
+            />
+          ) : null}
+          <Box flexDirection="row" flexWrap="wrap" gap="sm" alignItems="center">
+            {bereit ? (
+              <Button
+                key="auswahl"
+                label={anzahl > 0 ? `Auswahl senden (${anzahl})` : 'Senden'}
+                variant="primary"
+                onPress={() => abschicken(eigen)}
+              />
+            ) : (
+              <Text dimColor>Eine oder mehrere ankreuzen (Taste 1–{r.optionen.length}) und/oder selbst etwas ergänzen.</Text>
+            )}
+            {zu}
+          </Box>
+        </Box>
+      )
+    } else if (istFrage(r)) {
       inhalt = (
         <Box flexDirection="column" gap="sm">
           <Text bold>{r.frage}</Text>
