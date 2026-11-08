@@ -1,0 +1,16 @@
+{
+  "name": "limit-band-klick-antwort",
+  "owner": { "name": "Sascha88mh" },
+  "plugins": [
+    {
+      "name": "limit-band",
+      "source": "./limit-band",
+      "description": "Band über der Eingabezeile mit Tages- (5 Std.) und Wochenlimit als Balken"
+    },
+    {
+      "name": "klick-antwort",
+      "source": "./klick-antwort",
+      "description": "Rückfragen von Claude als klickbare Antwort-Knöpfe über der Eingabezeile"
+    }
+  ]
+}

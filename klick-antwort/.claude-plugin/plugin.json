@@ -1,0 +1,1 @@
+{ "name": "klick-antwort", "version": "0.1.0", "description": "Zeigt Rückfragen von Claude als klickbare Antwort-Knöpfe über der Eingabezeile", "types": "./types/index.d.ts" }

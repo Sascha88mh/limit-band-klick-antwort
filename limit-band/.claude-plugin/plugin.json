@@ -1,0 +1,1 @@
+{ "name": "limit-band", "version": "0.1.0", "description": "Zeigt über der Eingabezeile Tageslimit (5 Std.) und Wochenlimit an", "types": "./types/index.d.ts" }
