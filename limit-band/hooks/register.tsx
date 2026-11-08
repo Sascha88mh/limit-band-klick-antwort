@@ -179,10 +179,15 @@ export const register: Register = on => {
 
     // Das Band steht immer ganz unten, direkt über der Eingabezeile: Rückfragen und
     // andere Inhalte darüber, egal in welcher Reihenfolge die App die Add-ons lädt.
+    // Kein gap: Die App reicht auch ohne offene Frage einen leeren Platzhalter durch,
+    // ein gap davor würde die Zeile nach unten schieben. Unten gleicht paddingBottom
+    // das paddingTop der Zeile aus, damit sie mittig sitzt.
     return (
-      <Box flexDirection="column" gap="sm">
+      <Box flexDirection="column">
         {darunter}
-        {zeile}
+        <Box flexDirection="column" paddingBottom="sm">
+          {zeile}
+        </Box>
       </Box>
     )
   })
