@@ -13,10 +13,14 @@ Zwei kleine Add-ons (Mods) für Claude Code, gedacht für die Claude-Desktop-App
   Knöpfe reine Antworten sind; App-Aktionen wie Commit bleiben in der App-Box.
   Außerdem kann Claude in derselben Box
   - eine **Checkliste** mit Aufgaben zeigen, die du selbst erledigen musst:
-    Punkte anklicken zum Abhaken, sind alle erledigt, schickt „Erledigt – weiter“
-    die Liste an Claude;
+    Punkte anklicken zum Abhaken, sind alle erledigt, meldet „Erledigt – weiter“
+    Claude mit einem festen Satz, dass alles abgehakt ist;
   - ein **Eingabefeld** für einen einzelnen Wert zeigen (E-Mail-Adresse, Name,
-    URL …), abgeschickt mit Enter oder „Senden“. Nie für Passwörter oder Schlüssel.
+    URL …), abgeschickt mit Enter oder „Senden“. Felder, die nach Passwort,
+    Schlüssel, Token, PIN, IBAN oder Kartendaten klingen, lehnt das Add-on ab.
+
+  Knopf-Texte stammen von Claude und werden beim Klick in deinem Namen gesendet.
+  Darum sind sie auf eine Zeile mit höchstens 80 Zeichen begrenzt.
   Die Box schließt sich, sobald du antwortest, auch wenn du unten selbst tippst.
 
 Beide laufen auch im Terminal (das Band dann als Zeichenbalken).

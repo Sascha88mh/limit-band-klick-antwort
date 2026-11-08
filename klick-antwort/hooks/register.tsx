@@ -21,10 +21,24 @@ const ANLEITUNG = `# Rückfragen, Aufgaben und Eingaben über die Klick-Box
 - ${EINGABE}: Wenn du einen einzelnen Wert von der Person brauchst, etwa eine E-Mail-Adresse, einen Namen, eine URL oder eine Zahl (frage + feld als kurze Bezeichnung + optional platzhalter als Beispiel). Frag damit nie nach Passwörtern, API-Schlüsseln, Tokens, Kartennummern oder anderen Geheimnissen.
 Bei offenen Fragen, die eine längere freie Antwort verlangen, frag normal im Text.`
 
+const ERLEDIGT = 'Erledigt: Ich habe alle Punkte der Checkliste abgehakt.'
+
+// Felder, die nach Zugangsdaten oder Zahlungsdaten klingen, lehnt das Add-on selbst ab.
+const GEHEIM =
+  /pass(wort|word|phrase)|kennwort|\bpin\b|\btan\b|token|api[\s_-]?key|schl(ü|ue)ssel|secret|geheim|credential|zugangsdaten|\biban\b|kredit\s?karte|karten\s?nummer|card\s?number|\bcvc\b|\bcvv\b|sicherheitscode|2fa|einmalcode|otp\b/i
+
+/** Feldbezeichnung als eine kurze Zeile. */
+const kurz = (v: string) => v.replace(/\s+/g, ' ').trim().slice(0, 40)
+
 const text = (v: unknown) => (typeof v === 'string' ? v.trim() : '')
+/** Eine Zeile, höchstens `n` Zeichen: Knopf-Texte werden beim Klick in deinem Namen gesendet. */
+const zeile = (v: string, n: number) => {
+  const t = v.replace(/\s+/g, ' ').trim()
+  return t.length > n ? `${t.slice(0, n - 1)}…` : t
+}
 const liste = (v: unknown, max: number) =>
   Array.isArray(v)
-    ? v.filter((o): o is string => typeof o === 'string' && o.trim() !== '').map(o => o.trim()).slice(0, max)
+    ? v.filter((o): o is string => typeof o === 'string' && o.trim() !== '').map(o => zeile(o, 80)).slice(0, max)
     : []
 
 const istFrage = (o: Offen): o is Rueckfrage => o.art === undefined || o.art === 'frage'
@@ -131,6 +145,11 @@ export const register: Register = on => {
     if (!frage || !feld) {
       return { deny: 'Bitte eine Frage und eine Feldbezeichnung angeben.' }
     }
+    if (GEHEIM.test(`${frage} ${feld} ${platzhalter}`)) {
+      return {
+        deny: 'Das Eingabefeld ist nicht für Passwörter, Schlüssel, Tokens, PINs, Bank- oder Kartendaten da. Bitte die Person, so etwas selbst an der richtigen Stelle einzutragen, nicht im Chat.',
+      }
+    }
     await update($, entwurf, () => '')
     await update($, offen, () => ({ art: 'eingabe' as const, frage, feld, ...(platzhalter ? { platzhalter } : {}) }))
     return { result: `Das Eingabefeld wird der Person jetzt angezeigt. ${WARTEN}` }
@@ -150,7 +169,7 @@ export const register: Register = on => {
     const antworten = knoepfe
       .map(k => (k && typeof k === 'object' ? (k as { label?: unknown; action?: unknown }) : {}))
       .filter(k => !k.action && typeof k.label === 'string' && k.label.trim() !== '')
-      .map(k => String(k.label).trim())
+      .map(k => zeile(String(k.label), 80))
 
     if (!frage || antworten.length === 0 || antworten.length !== knoepfe.length) return next(e)
 
@@ -227,8 +246,8 @@ export const register: Register = on => {
         update($, offen, alt =>
           alt && alt.art === 'aufgaben' ? { ...alt, erledigt: alt.erledigt.map((x, j) => (j === i ? !x : x)) } : alt,
         )
-      const fertig = () =>
-        senden(`Erledigt: ${a.titel}\n${a.punkte.map(p => `- [x] ${p}`).join('\n')}`)
+      // Fester Satz: Claudes eigener Text wird nicht in deinem Namen abgeschickt.
+      const fertig = () => senden(ERLEDIGT)
       inhalt = (
         <Box flexDirection="column" gap="sm">
           <Box flexDirection="row" gap="sm" alignItems="center">
@@ -261,7 +280,7 @@ export const register: Register = on => {
     } else {
       const f: Eingabe = r
       const wert = await read($, entwurf)
-      const abschicken = (v: string) => (v.trim() ? senden(`${f.feld}: ${v.trim()}`) : undefined)
+      const abschicken = (v: string) => (v.trim() ? senden(`${kurz(f.feld)}: ${v.trim()}`) : undefined)
       inhalt = (
         <Box flexDirection="column" gap="sm">
           <Text bold>{f.frage}</Text>
