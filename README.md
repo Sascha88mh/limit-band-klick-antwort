@@ -11,6 +11,13 @@ Zwei kleine Add-ons (Mods) für Claude Code, gedacht für die Claude-Desktop-App
   Optionen über dieses Tool zu stellen. In der Desktop-App landen auch die
   Abschlussfragen am Ende eines Zugs (die „Next step“-Box) dort, sofern alle
   Knöpfe reine Antworten sind; App-Aktionen wie Commit bleiben in der App-Box.
+  Außerdem kann Claude in derselben Box
+  - eine **Checkliste** mit Aufgaben zeigen, die du selbst erledigen musst:
+    Punkte anklicken zum Abhaken, sind alle erledigt, schickt „Erledigt – weiter“
+    die Liste an Claude;
+  - ein **Eingabefeld** für einen einzelnen Wert zeigen (E-Mail-Adresse, Name,
+    URL …), abgeschickt mit Enter oder „Senden“. Nie für Passwörter oder Schlüssel.
+  Die Box schließt sich, sobald du antwortest, auch wenn du unten selbst tippst.
 
 Beide laufen auch im Terminal (das Band dann als Zeichenbalken).
 

@@ -87,3 +87,61 @@ test('Box schließt, sobald ein neuer Zug mit Nachricht beginnt', async ($, on) 
   expect(await ui.find({ type: 'Text', text: /Welche Farbe/ })).toBeUndefined()
   await ui.unmount()
 })
+
+test('Checkliste: abhaken, dann Erledigt abschicken', async ($, on) => {
+  const gesendet: string[] = []
+  on('tool.register', () => ({ value: undefined }))
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  on('prompt.submit', (_, e) => { gesendet.push(e.text); return { text: e.text } })
+  on('ui.render', ($, e) => { const { Text } = $.ui.resolve(e); return <Text>unten</Text> })
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+
+  const r = await $.tool.call({ tool: 'mcp__klick-antwort__aufgaben', titel: 'Stripe einrichten', punkte: ['Account anlegen', 'Testmodus an'] })
+  expect(r.deny).toBeUndefined()
+
+  const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
+  expect(await ui.find({ type: 'Text', text: /Stripe einrichten/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /Noch 2 Punkte offen/ })).toBeDefined()
+  expect(await ui.find({ key: 'erledigt' })).toBeUndefined()
+
+  await ui.press({ key: 'punkt-0' })
+  expect(await ui.find({ type: 'Text', text: /Noch 1 Punkt offen/ })).toBeDefined()
+  await ui.press({ key: 'punkt-1' })
+  expect(await ui.find({ key: 'erledigt' })).toBeDefined()
+
+  await ui.press({ key: 'erledigt' })
+  expect(gesendet).toEqual(['Erledigt: Stripe einrichten\n- [x] Account anlegen\n- [x] Testmodus an'])
+  expect(await ui.find({ type: 'Text', text: /Stripe einrichten/ })).toBeUndefined()
+  await ui.unmount()
+})
+
+test('Eingabefeld: Wert tippen und mit Enter abschicken', async ($, on) => {
+  const gesendet: string[] = []
+  on('tool.register', () => ({ value: undefined }))
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  on('prompt.submit', (_, e) => { gesendet.push(e.text); return { text: e.text } })
+  on('ui.render', ($, e) => { const { Text } = $.ui.resolve(e); return <Text>unten</Text> })
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+
+  const r = await $.tool.call({ tool: 'mcp__klick-antwort__eingabe', frage: 'An welche Adresse sollen Mails gehen?', feld: 'E-Mail-Adresse', platzhalter: 'name@beispiel.de' })
+  expect(r.deny).toBeUndefined()
+
+  const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
+  expect(await ui.find({ type: 'Text', text: /welche Adresse/ })).toBeDefined()
+  // Leere Eingabe schickt nichts ab.
+  await ui.input({ key: 'feld', text: '   ' })
+  expect(gesendet).toEqual([])
+
+  await ui.input({ key: 'feld', text: 'test@beispiel.de', kind: 'change' })
+  expect(await ui.find({ key: 'senden' })).toBeDefined()
+  await ui.input({ key: 'feld', text: 'test@beispiel.de' })
+  expect(gesendet).toEqual(['E-Mail-Adresse: test@beispiel.de'])
+  expect(await ui.find({ type: 'Text', text: /welche Adresse/ })).toBeUndefined()
+  await ui.unmount()
+
+  // Auf dem Handy gibt es kein Feld: Hinweis auf die Eingabezeile.
+  await $.tool.call({ tool: 'mcp__klick-antwort__eingabe', frage: 'Name?', feld: 'Name' })
+  const m = await $.ui.mount({ ...BAND, surface: 'mobile' })
+  expect(await m.find({ type: 'Text', text: /unten in die Eingabezeile/ })).toBeDefined()
+  await m.unmount()
+})

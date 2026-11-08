@@ -1,15 +1,38 @@
 import { atom, read, update } from 'claude-code'
-import type { Register } from 'claude-code'
+import type { EngineInterface, Register } from 'claude-code'
 
-import type { Rueckfrage } from '../types'
+import type { Aufgaben, Eingabe, Offen, Rueckfrage } from '../types'
 
-const offen = atom({ plugin: 'klick-antwort', key: 'offen' } as const, null as Rueckfrage | null)
+const offen = atom({ plugin: 'klick-antwort', key: 'offen' } as const, null as Offen | null)
+const entwurf = atom({ plugin: 'klick-antwort', key: 'entwurf' } as const, '')
 
 const TOOL = 'mcp__klick-antwort__rueckfrage'
+const AUFGABEN = 'mcp__klick-antwort__aufgaben'
+const EINGABE = 'mcp__klick-antwort__eingabe'
 const WRAP_UP = 'mcp__ccd_turn__wrap_up'
 
-const ANLEITUNG = `# Rückfragen mit Klick-Antworten
-Wenn du eine Entscheidung oder Auswahl der Person brauchst und die Antwort aus wenigen klaren Möglichkeiten besteht, rufe das Tool ${TOOL} auf (frage + 2 bis 6 kurze Optionen, empfohlene Option zuerst), statt die Frage nur als Text zu stellen. Die Person klickt dann einfach eine Antwort an. Nach dem Aufruf beendest du deinen Zug sofort und wartest: Die gewählte Antwort kommt als nächste Nachricht der Person. Pro Zug höchstens eine solche Rückfrage. Bei offenen Fragen, die freien Text verlangen, frag normal im Text.`
+const WARTEN =
+  'Beende deinen Zug ohne weiteren Text außer höchstens einem kurzen Satz; die Antwort der Person kommt als nächste Nachricht.'
+
+const ANLEITUNG = `# Rückfragen, Aufgaben und Eingaben über die Klick-Box
+Über der Eingabezeile gibt es eine Box, in der die Person mit einem Klick antwortet. Nutze sie über drei Werkzeuge, jeweils höchstens eines pro Zug. Nach dem Aufruf beendest du deinen Zug sofort und wartest: Die Antwort kommt als nächste Nachricht der Person.
+- ${TOOL}: Wenn du eine Entscheidung oder Auswahl brauchst und die Antwort aus wenigen klaren Möglichkeiten besteht (frage + 2 bis 6 kurze Optionen, empfohlene zuerst). Stell solche Fragen nicht nur als Text.
+- ${AUFGABEN}: Wenn die Person selbst etwas tun muss, bevor es weitergeht, etwa einen Account anlegen, eine Einstellung ändern, eine Datei hochladen oder etwas im Browser bestätigen (titel + 1 bis 8 Stichpunkte, je ein konkreter Schritt in ganz kurzer, einfacher Sprache, in der richtigen Reihenfolge). Die Person hakt die Punkte ab und schickt „Erledigt“; dann weißt du, dass alles getan ist.
+- ${EINGABE}: Wenn du einen einzelnen Wert von der Person brauchst, etwa eine E-Mail-Adresse, einen Namen, eine URL oder eine Zahl (frage + feld als kurze Bezeichnung + optional platzhalter als Beispiel). Frag damit nie nach Passwörtern, API-Schlüsseln, Tokens, Kartennummern oder anderen Geheimnissen.
+Bei offenen Fragen, die eine längere freie Antwort verlangen, frag normal im Text.`
+
+const text = (v: unknown) => (typeof v === 'string' ? v.trim() : '')
+const liste = (v: unknown, max: number) =>
+  Array.isArray(v)
+    ? v.filter((o): o is string => typeof o === 'string' && o.trim() !== '').map(o => o.trim()).slice(0, max)
+    : []
+
+const istFrage = (o: Offen): o is Rueckfrage => o.art === undefined || o.art === 'frage'
+
+async function schliessen($: EngineInterface) {
+  if ((await read($, offen)) !== null) await update($, offen, () => null)
+  if ((await read($, entwurf)) !== '') await update($, entwurf, () => '')
+}
 
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
@@ -33,6 +56,41 @@ export const register: Register = on => {
       },
       isDeferred: false,
     })
+    await $.tool.register({
+      name: 'aufgaben',
+      description:
+        'Zeigt der Person eine Checkliste mit Aufgaben, die sie selbst erledigen muss. Sie hakt jeden Punkt ab und schickt dann „Erledigt“. Danach den Zug beenden; die Bestätigung kommt als nächste Nachricht.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          titel: { type: 'string', description: 'Worum es geht, in wenigen Wörtern.' },
+          punkte: {
+            type: 'array',
+            items: { type: 'string' },
+            minItems: 1,
+            maxItems: 8,
+            description: 'Die Schritte in Reihenfolge, je ein ganz kurzer, einfacher Stichpunkt.',
+          },
+        },
+        required: ['titel', 'punkte'],
+      },
+      isDeferred: false,
+    })
+    await $.tool.register({
+      name: 'eingabe',
+      description:
+        'Zeigt der Person ein Eingabefeld für einen einzelnen Wert (E-Mail-Adresse, Name, URL, Zahl …). Nie für Passwörter, Schlüssel oder andere Geheimnisse. Danach den Zug beenden; der Wert kommt als nächste Nachricht.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          frage: { type: 'string', description: 'Was du brauchst und wofür, in einem kurzen Satz.' },
+          feld: { type: 'string', description: 'Kurze Bezeichnung des Werts, z. B. „E-Mail-Adresse“.' },
+          platzhalter: { type: 'string', description: 'Optionales Beispiel, das grau im leeren Feld steht.' },
+        },
+        required: ['frage', 'feld'],
+      },
+      isDeferred: false,
+    })
     return next(e)
   })
 
@@ -45,20 +103,37 @@ export const register: Register = on => {
 
   on('tool.call', { tool: TOOL }, async ($, e) => {
     const input = e as unknown as { frage?: unknown; optionen?: unknown }
-    const frage = typeof input.frage === 'string' ? input.frage.trim() : ''
-    const optionen = Array.isArray(input.optionen)
-      ? input.optionen.filter((o): o is string => typeof o === 'string' && o.trim() !== '').map(o => o.trim()).slice(0, 6)
-      : []
-
+    const frage = text(input.frage)
+    const optionen = liste(input.optionen, 6)
     if (!frage || optionen.length < 2) {
       return { deny: 'Bitte eine Frage und mindestens zwei Optionen angeben.' }
     }
+    await update($, offen, () => ({ art: 'frage' as const, frage, optionen }))
+    return { result: `Die Rückfrage wird der Person jetzt als Knöpfe angezeigt. ${WARTEN}` }
+  })
 
-    await update($, offen, () => ({ frage, optionen }))
-    return {
-      result:
-        'Die Rückfrage wird der Person jetzt als Knöpfe angezeigt. Beende deinen Zug ohne weiteren Text außer höchstens einem kurzen Satz; die gewählte Antwort kommt als nächste Nachricht.',
+  on('tool.call', { tool: AUFGABEN }, async ($, e) => {
+    const input = e as unknown as { titel?: unknown; punkte?: unknown }
+    const titel = text(input.titel)
+    const punkte = liste(input.punkte, 8)
+    if (!titel || punkte.length === 0) {
+      return { deny: 'Bitte einen Titel und mindestens einen Stichpunkt angeben.' }
     }
+    await update($, offen, () => ({ art: 'aufgaben' as const, titel, punkte, erledigt: punkte.map(() => false) }))
+    return { result: `Die Checkliste wird der Person jetzt angezeigt. ${WARTEN}` }
+  })
+
+  on('tool.call', { tool: EINGABE }, async ($, e) => {
+    const input = e as unknown as { frage?: unknown; feld?: unknown; platzhalter?: unknown }
+    const frage = text(input.frage)
+    const feld = text(input.feld)
+    const platzhalter = text(input.platzhalter)
+    if (!frage || !feld) {
+      return { deny: 'Bitte eine Frage und eine Feldbezeichnung angeben.' }
+    }
+    await update($, entwurf, () => '')
+    await update($, offen, () => ({ art: 'eingabe' as const, frage, feld, ...(platzhalter ? { platzhalter } : {}) }))
+    return { result: `Das Eingabefeld wird der Person jetzt angezeigt. ${WARTEN}` }
   })
 
   // Die Abschlussfrage der Desktop-App (Next-Step-Box) in die eigene Fragebox umleiten.
@@ -70,7 +145,7 @@ export const register: Register = on => {
       actions?: unknown
       [k: string]: unknown
     }
-    const frage = typeof ask === 'string' ? ask.trim() : ''
+    const frage = text(ask)
     const knoepfe = Array.isArray(actions) ? actions : []
     const antworten = knoepfe
       .map(k => (k && typeof k === 'object' ? (k as { label?: unknown; action?: unknown }) : {}))
@@ -79,14 +154,20 @@ export const register: Register = on => {
 
     if (!frage || antworten.length === 0 || antworten.length !== knoepfe.length) return next(e)
 
-    await update($, offen, () => ({ frage, optionen: antworten.slice(0, 6) }))
+    // Steht in diesem Zug schon eine Rückfrage, Checkliste oder Eingabe offen, bleibt sie stehen.
+    const schonOffen = (await read($, offen)) !== null
+    if (!schonOffen) {
+      await update($, offen, () => ({ art: 'frage' as const, frage, optionen: antworten.slice(0, 6) }))
+    }
     const r = await next(rest as unknown as typeof e)
     if (r.deny !== undefined) return r
     return {
       ...r,
       context: [
         ...(r.context ?? []),
-        'Die Frage aus ask wurde nicht in der App-Box, sondern als Klick-Knöpfe über der Eingabezeile angezeigt. Stell sie nicht noch einmal im Text.',
+        schonOffen
+          ? 'Über der Eingabezeile ist schon eine Rückfrage, Checkliste oder Eingabe offen; die Frage aus ask wurde deshalb nicht angezeigt. Stell sie nicht im Text.'
+          : 'Die Frage aus ask wurde nicht in der App-Box, sondern als Klick-Knöpfe über der Eingabezeile angezeigt. Stell sie nicht noch einmal im Text.',
       ],
     }
   })
@@ -94,17 +175,13 @@ export const register: Register = on => {
   // Eingaben aus der Desktop-App oder über Remote Control lösen kein prompt.submit aus.
   // Darum schließt die Box auch, sobald ein neuer Zug mit einer Nachricht beginnt.
   on('turn.start', async ($, e, next) => {
-    if (e.agentId === undefined && e.text !== '' && (await read($, offen)) !== null) {
-      await update($, offen, () => null)
-    }
+    if (e.agentId === undefined && e.text !== '') await schliessen($)
     return next(e)
   })
 
-  // Sobald die Person selbst etwas schickt (getippt oder geklickt), ist die Rückfrage erledigt.
+  // Sobald die Person selbst etwas schickt (getippt oder geklickt), ist die Box erledigt.
   on('prompt.submit', async ($, e, next) => {
-    if ((await read($, offen)) !== null) {
-      await update($, offen, () => null)
-    }
+    await schliessen($)
     return next(e)
   })
 
@@ -112,18 +189,21 @@ export const register: Register = on => {
     const r = await read($, offen)
     if (r === null || e.props.hasSurvey) return next(e)
 
-    const { Box, Text, Button } = $.ui.resolve(e)
+    const el = $.ui.resolve(e)
+    const { Box, Text, Button } = el
     const darunter = await next(e)
 
-    const antworten = (text: string) => async () => {
+    const senden = async (antwort: string) => {
       await update($, offen, () => null)
-      await $.prompt.submit({ text, asUser: true })
+      await update($, entwurf, () => '')
+      await $.prompt.submit({ text: antwort, asUser: true })
     }
+    const zu = <Button key="schliessen" label="✕" role="dismiss" onPress={() => update($, offen, () => null)} />
 
-    return (
-      <Box flexDirection="column">
-        {/* Der Seitenabstand liegt auf einer inneren Box: an der Wurzel wird er vom Rahmen nicht zuverlässig gezeichnet. */}
-        <Box flexDirection="column" gap="sm" paddingX="xl">
+    let inhalt
+    if (istFrage(r)) {
+      inhalt = (
+        <Box flexDirection="column" gap="sm">
           <Text bold>{r.frage}</Text>
           <Box flexDirection="row" flexWrap="wrap" gap="sm">
             {r.optionen.map((o, i) => (
@@ -132,12 +212,91 @@ export const register: Register = on => {
                 label={o}
                 hotkey={String(i + 1)}
                 variant={i === 0 ? 'primary' : undefined}
-                onPress={antworten(o)}
+                onPress={() => senden(o)}
               />
             ))}
-            <Button key="schliessen" label="✕" role="dismiss" onPress={() => update($, offen, () => null)} />
+            {zu}
           </Box>
           <Text dimColor>Klicken, Taste 1–{r.optionen.length} oder einfach selbst etwas tippen.</Text>
+        </Box>
+      )
+    } else if (r.art === 'aufgaben') {
+      const a: Aufgaben = r
+      const offenZahl = a.erledigt.filter(x => !x).length
+      const umschalten = (i: number) => () =>
+        update($, offen, alt =>
+          alt && alt.art === 'aufgaben' ? { ...alt, erledigt: alt.erledigt.map((x, j) => (j === i ? !x : x)) } : alt,
+        )
+      const fertig = () =>
+        senden(`Erledigt: ${a.titel}\n${a.punkte.map(p => `- [x] ${p}`).join('\n')}`)
+      inhalt = (
+        <Box flexDirection="column" gap="sm">
+          <Box flexDirection="row" gap="sm" alignItems="center">
+            <Text bold>Für dich zu tun: {a.titel}</Text>
+          </Box>
+          <Box flexDirection="column" gap="xs">
+            {a.punkte.map((p, i) => (
+              <Button
+                key={`punkt-${i}`}
+                label={`${a.erledigt[i] ? '☑' : '☐'}  ${p}`}
+                hotkey={i < 9 ? String(i + 1) : undefined}
+                plain
+                dimColor={a.erledigt[i]}
+                onPress={umschalten(i)}
+              />
+            ))}
+          </Box>
+          <Box flexDirection="row" flexWrap="wrap" gap="sm" alignItems="center">
+            {offenZahl === 0 ? (
+              <Button key="erledigt" label="Erledigt – weiter" variant="primary" onPress={fertig} />
+            ) : (
+              <Text dimColor>
+                {offenZahl === 1 ? 'Noch 1 Punkt offen' : `Noch ${offenZahl} Punkte offen`} · Punkte anklicken zum Abhaken
+              </Text>
+            )}
+            {zu}
+          </Box>
+        </Box>
+      )
+    } else {
+      const f: Eingabe = r
+      const wert = await read($, entwurf)
+      const abschicken = (v: string) => (v.trim() ? senden(`${f.feld}: ${v.trim()}`) : undefined)
+      inhalt = (
+        <Box flexDirection="column" gap="sm">
+          <Text bold>{f.frage}</Text>
+          {e.surface !== 'mobile' && 'Input' in el ? (
+            <Box flexDirection="row" flexWrap="wrap" gap="sm" alignItems="center">
+              <el.Input
+                key="feld"
+                label={f.feld}
+                placeholder={f.platzhalter}
+                value={wert}
+                submitLabel="senden"
+                autoFocus
+                onInput={v => update($, entwurf, () => v)}
+                onSubmit={v => abschicken(v)}
+              />
+              {wert.trim() ? (
+                <Button key="senden" label="Senden" variant="primary" onPress={() => abschicken(wert)} />
+              ) : null}
+              {zu}
+            </Box>
+          ) : (
+            <Box flexDirection="row" gap="sm" alignItems="center">
+              <Text dimColor>{f.feld}: bitte unten in die Eingabezeile tippen.</Text>
+              {zu}
+            </Box>
+          )}
+        </Box>
+      )
+    }
+
+    return (
+      <Box flexDirection="column">
+        {/* Der Seitenabstand liegt auf einer inneren Box: an der Wurzel wird er vom Rahmen nicht zuverlässig gezeichnet. */}
+        <Box flexDirection="column" gap="sm" paddingX="xl">
+          {inhalt}
         </Box>
         {darunter ? <Box marginTop="sm">{darunter}</Box> : null}
       </Box>
