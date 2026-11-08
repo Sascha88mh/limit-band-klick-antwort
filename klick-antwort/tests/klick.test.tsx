@@ -67,3 +67,23 @@ test('Abschlussfrage der App landet in der Fragebox', async ($, on) => {
   })
   expect(anApp[1].ask).toBe('Committen?')
 })
+
+test('Box schließt, sobald ein neuer Zug mit Nachricht beginnt', async ($, on) => {
+  on('tool.register', () => ({ value: undefined }))
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  on('turn.start', (_, e) => ({ turnId: e.turnId }))
+  on('ui.render', ($, e) => { const { Text } = $.ui.resolve(e); return <Text>unten</Text> })
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  await $.tool.call({ tool: 'mcp__klick-antwort__rueckfrage', frage: 'Welche Farbe?', optionen: ['Rot', 'Blau'] })
+
+  const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
+  expect(await ui.find({ type: 'Text', text: /Welche Farbe/ })).toBeDefined()
+
+  // Ein Zug ohne Text (Fortsetzung) lässt die Box offen.
+  await $.turn.start({ text: '', turnId: 't0' })
+  expect(await ui.find({ type: 'Text', text: /Welche Farbe/ })).toBeDefined()
+
+  await $.turn.start({ text: 'Grün, bitte', turnId: 't1' })
+  expect(await ui.find({ type: 'Text', text: /Welche Farbe/ })).toBeUndefined()
+  await ui.unmount()
+})

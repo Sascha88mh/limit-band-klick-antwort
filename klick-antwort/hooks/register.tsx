@@ -91,6 +91,15 @@ export const register: Register = on => {
     }
   })
 
+  // Eingaben aus der Desktop-App oder über Remote Control lösen kein prompt.submit aus.
+  // Darum schließt die Box auch, sobald ein neuer Zug mit einer Nachricht beginnt.
+  on('turn.start', async ($, e, next) => {
+    if (e.agentId === undefined && e.text !== '' && (await read($, offen)) !== null) {
+      await update($, offen, () => null)
+    }
+    return next(e)
+  })
+
   // Sobald die Person selbst etwas schickt (getippt oder geklickt), ist die Rückfrage erledigt.
   on('prompt.submit', async ($, e, next) => {
     if ((await read($, offen)) !== null) {
